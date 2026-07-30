@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.Sernheise" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/sern_accent</item>
+        <item name="colorPrimaryVariant">@color/sern_accent_soft</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/sern_accent_soft</item>
+        <item name="android:windowBackground">@color/sern_bg</item>
+        <item name="android:statusBarColor">@color/sern_bg</item>
+        <item name="android:navigationBarColor">@color/sern_bg</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        <item name="android:textColorPrimary">@color/sern_text_primary</item>
+        <item name="android:textColorSecondary">@color/sern_text_secondary</item>
+    </style>
+
+    <!--
+      Dialog styling scoped to the export dialog only: the rest of the app keeps its
+      existing base theme untouched, per "don't redesign the UI". Applied via
+      MaterialAlertDialogBuilder(context, R.style.ThemeOverlay_Sernheise_ExportDialog).
+      Dynamic color (Material You) is layered on top of this at runtime in ExportProgressDialog
+      via DynamicColors.wrapContextIfAvailable(), which is a no-op pre-Android-12.
+
+      IMPORTANT: this must extend a MaterialComponents (M2) overlay, not a Material3 one.
+      Theme.Sernheise itself is Theme.MaterialComponents.*, and M3 dialog overlays reference
+      color-role/typography attributes that don't exist in an M2 theme chain. Doing that threw
+      at MaterialAlertDialogBuilder(...).create() time, synchronously on the main thread in the
+      Export click handler, which is what crashed the whole app the instant Export was tapped.
+    -->
+    <style name="ThemeOverlay.Sernheise.ExportDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearanceOverlay.Sernheise.ExportDialog</item>
+        <item name="colorSurface">@color/sern_surface</item>
+        <item name="colorOnSurface">@color/sern_text_primary</item>
+        <item name="colorPrimary">@color/sern_accent</item>
+        <item name="android:windowAnimationStyle">@style/Sernheise.DialogAnimation</item>
+    </style>
+
+    <style name="ShapeAppearanceOverlay.Sernheise.ExportDialog" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">28dp</item>
+    </style>
+
+    <style name="Sernheise.DialogAnimation" parent="android:Animation.Dialog">
+        <item name="android:windowEnterAnimation">@anim/dialog_enter</item>
+        <item name="android:windowExitAnimation">@anim/dialog_exit</item>
+    </style>
+</resources>

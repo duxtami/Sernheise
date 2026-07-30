@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sern_bg">#0E0F12</color>
+    <color name="sern_surface">#17181C</color>
+    <color name="sern_surface_alt">#1F2126</color>
+    <color name="sern_accent">#5B8CFF</color>
+    <color name="sern_accent_soft">#9FB6FF</color>
+    <color name="sern_text_primary">#F5F6F8</color>
+    <color name="sern_text_secondary">#9A9CA5</color>
+    <color name="sern_divider">#2A2C31</color>
+    <color name="sern_slider_track">#2E3036</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>

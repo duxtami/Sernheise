@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sernheise</string>
+    <string name="tagline">Reveal Every Detail</string>
+    <string name="import_hint">Tap + to import a photo or video</string>
+    <string name="tab_adjust">Adjust</string>
+    <string name="tab_details">Details</string>
+    <string name="tool_exposure">Exposure</string>
+    <string name="tool_brightness">Brightness</string>
+    <string name="tool_contrast">Contrast</string>
+    <string name="tool_saturation">Saturation</string>
+    <string name="tool_highlights">Highlights</string>
+    <string name="tool_shadows">Shadows</string>
+    <string name="tool_temperature">Temperature</string>
+    <string name="tool_tint">Tint</string>
+    <string name="tool_rotate">Rotate</string>
+    <string name="tool_flip_horizontal">Flip H</string>
+    <string name="tool_flip_vertical">Flip V</string>
+    <string name="tool_structure">Structure</string>
+    <string name="tool_sharpen">Sharpen</string>
+    <string name="action_export">Export</string>
+    <string name="action_reset">Reset</string>
+    <string name="action_compare">Compare</string>
+    <string name="exporting">Exporting\u2026</string>
+    <string name="export_status_preparing">Preparing\u2026</string>
+    <string name="export_status_processing">Processing video\u2026</string>
+    <string name="export_status_finishing">Finishing up\u2026</string>
+    <string name="export_eta_seconds">~%1$ds left</string>
+    <string name="export_done">Saved to gallery</string>
+    <string name="export_done_title">Export complete</string>
+    <string name="export_failed">Export failed</string>
+    <string name="export_failed_title">Export failed</string>
+    <string name="export_failed_message">Something went wrong while exporting. Please try again.</string>
+    <string name="dialog_ok">OK</string>
+    <string name="load_failed">Couldn\'t open this file</string>
+    <string name="unsupported_file">This file type isn\'t supported</string>
+    <string name="permission_needed">Sernheise needs media access to import your photos and videos.</string>
+</resources>
