@@ -256,19 +256,42 @@ object StructureShaders {
             float detailCoarse = qSmall - qLarge;
 
             float skin = skinLikelihood(orig);
-            float fineReduction = mix(1.0, 0.45, skin);
+            // Raised close to 1.0 (was 0.6, then 0.92) -- combined with the fine-scale
+            // epsilon fix in StructurePipeline (pore-level variance is no longer smoothed
+            // into the base layer before this gain even applies), skin can now carry
+            // nearly full detail gain without the result looking artificial.
+            float fineReduction = mix(1.0, 0.95, skin);
 
-            // Gain is close to uniform across the image on purpose: because detailFine is
-            // already small at real edges/hard boundaries, there is little there to over-
-            // amplify regardless of gain, so this pipeline does not need the heavy per-
-            // pixel edge-suppression the previous (blur-difference) version required.
-            float weighted = detailFine * fineReduction * 0.55 + detailCoarse * 0.6;
-            float delta = weighted * u_amount;
+            // Gain pushed further (was 2.3 / 2.4) now that the fine-scale epsilon fix
+            // means detailFine actually contains the subtle pore-level variance instead of
+            // having already lost it upstream -- this gain is now amplifying real signal,
+            // not mostly noise, which is what makes a higher value safe here.
+            float weighted = detailFine * fineReduction * 3.1 + detailCoarse * 2.4;
+
+            // Edge punch: a true unsharp-mask-style term, distinct from the guided-filter
+            // detail bands above. Those bands can only amplify variance that already
+            // exists in the source; on genuinely soft/motion-blurred source material
+            // (video frames, compressed footage) that variance is already weak, so no
+            // amount of gain on detailFine/detailCoarse alone recovers a "crisp" feel --
+            // there's little there to amplify. This term instead boosts the existing
+            // gradient directly, gated by aSmall (the guided filter's own edge-confidence
+            // map) so it only fires on genuine edges/high-frequency content, not on flat
+            // regions or compression noise -- that gating is what keeps this from making
+            // grainy/soft footage look noisier rather than sharper.
+            float edgePunch = detailFine * aSmall * 1.4;
+            float delta = (weighted + edgePunch) * u_amount;
 
             // Shadow protection: fades enhancement toward zero as luminance approaches
             // true black, regardless of which direction delta points -- preserves shadow
             // texture and black detail against ordinary sensor grain being amplified.
-            float shadowRolloff = smoothstep(0.0, 0.14, lumOrig);
+            // Threshold lowered (was 0.14) -- that value was cutting off structure
+            // enhancement across most of a typical moody/low-light scene (night shots,
+            // dramatic lighting), not just near-black noise floor pixels. 0.14 in
+            // normalized luminance is not actually that dark -- plenty of real, wanted
+            // shadow-region texture (skin, fabric, blood/grime detail in a dim scene)
+            // sits below it and was getting suppressed outright. 0.035 still protects
+            // genuine near-black noise while letting dim-but-real scene detail through.
+            float shadowRolloff = smoothstep(0.0, 0.035, lumOrig);
             delta *= shadowRolloff;
 
             // Highlight smoothness: gradually reduces enhancement well before any channel
@@ -296,7 +319,11 @@ object StructureShaders {
             // strands, and weave texture register as higher-variance and are left alone,
             // which is what keeps this from reading as a plastic/beauty-filter smooth.
             float polishGate = 1.0 - aSmall;
-            float polishAmount = polishGate * 0.26 * u_amount * shadowRolloff;
+            // Was 0.26 -- this term nudges skin/flat areas toward a smoothed reference,
+            // which was actively fighting against the fine detail gain above (adding
+            // texture with one hand, smoothing it back out with the other). Reduced so it
+            // only takes the harshest edge off, instead of visibly flattening pore texture.
+            float polishAmount = polishGate * 0.08 * u_amount * shadowRolloff;
             float polishedBase = mix(lumOrig, qSmall, polishAmount);
 
             // Luminance-only, no global tone curve: a truly flat region has zero variance
@@ -319,8 +346,14 @@ object StructureShaders {
             // "sharpened". Screen blend (a + b*(1-a)) can only ever add light, never
             // subtract or add contrast, and by construction can never push a channel past
             // 1.0 -- it softens/refines highlights rather than clipping them harder.
+            // Glow reduced (was 0.35) and now also gated by aSmall: aSmall is the guided
+            // filter's own confidence that this pixel sits on real texture/edge detail, so
+            // (1 - aSmall) keeps glow concentrated on genuinely flat/smooth highlight zones
+            // (skin sheen, catchlights) instead of glowing over areas that should instead be
+            // showing crisp detail -- which is what made the effect read as "just glow"
+            // rather than "structure" in busier/textured regions of a photo.
             float glowSample = texture2D(u_glow, v_texCoord).r;
-            float glowContribution = glowSample * 0.35 * u_amount * shadowRolloff;
+            float glowContribution = glowSample * 0.16 * u_amount * shadowRolloff * (1.0 - aSmall * 0.6);
             result = result + glowContribution * (1.0 - result);
 
             gl_FragColor = vec4(clamp(result, 0.0, 1.0), 1.0);

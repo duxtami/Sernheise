@@ -36,4 +36,3 @@ app/src/main/java/com/sernheise/app/
 - The Structure and Sharpen effects are both single-pass unsharp-mask variants applied
   directly in the fragment shader (`SernShaders.kt`) — Structure samples a wider radius
   for broad clarity, Sharpen samples immediate neighbors for fine edge detail.
-# Sernheise

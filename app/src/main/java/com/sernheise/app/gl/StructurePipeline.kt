@@ -28,20 +28,29 @@ import android.opengl.GLES20
 class StructurePipeline {
 
     companion object {
+        private const val GL_HALF_FLOAT_OES = 0x8D61
         private const val MAX_LARGE_SCALE_DIMENSION = 1600
         private const val AMOUNT_EPSILON = 0.004f
         private const val SMALL_RADIUS = 2.0f
         private const val LARGE_RADIUS = 10.0f
         // Guided filter epsilon (in normalized-luminance-squared units): controls the
         // variance threshold below which a region is treated as "flat, just smooth it"
-        // rather than "real structure, preserve it". Deliberately not tiny -- a very small
-        // epsilon would treat ordinary sensor noise as structure to preserve, which is the
-        // opposite of what a clean, premium-looking result needs.
-        private const val GUIDED_EPSILON = 0.0009f
+        // rather than "real structure, preserve it".
+        // Two separate values now (previously one shared constant): skin pore-level
+        // contrast has genuinely tiny variance -- smaller than the old single epsilon
+        // (0.0009) -- so at the fine/small scale that variance was being smoothed into
+        // the guided filter's own base layer (q) *before* the composite's detail gain
+        // ever saw it. No amount of gain applied afterward can recover detail that was
+        // already averaged away at this stage. FINE_EPSILON is set low enough to let
+        // that subtle pore-level variance register as "structure" instead. COARSE_EPSILON
+        // stays at the original value -- broader local-contrast richness doesn't need the
+        // same sensitivity, and keeping it higher avoids treating ordinary sensor noise as
+        // structure at that larger radius.
+        private const val FINE_EPSILON = 0.00018f
+        private const val COARSE_EPSILON = 0.0009f
         // Wider than either guided-filter radius on purpose -- glow is meant to be a soft,
         // diffuse spread of light around highlights, not a local-contrast operation.
         private const val GLOW_RADIUS = 20.0f
-        private const val GL_HALF_FLOAT_OES = 0x8D61
     }
 
     private var resolveOesProgram: GlProgram? = null
@@ -116,13 +125,13 @@ class StructurePipeline {
         packLuminance(originalTex)
 
         runGuidedFilterScale(
-            outputW = fullW, outputH = fullH, radius = SMALL_RADIUS,
+            outputW = fullW, outputH = fullH, radius = SMALL_RADIUS, epsilon = FINE_EPSILON,
             meanCorrScratchFbo = smallScratchFbo, meanCorrFbo = smallMeanCorrFbo, meanCorrTex = smallMeanCorrTex,
             abFbo = smallAbFbo, abTex = smallAbTex,
             qScratchFbo = smallScratchFbo, qFbo = qSmallFbo
         )
         runGuidedFilterScale(
-            outputW = largeW, outputH = largeH, radius = LARGE_RADIUS,
+            outputW = largeW, outputH = largeH, radius = LARGE_RADIUS, epsilon = COARSE_EPSILON,
             meanCorrScratchFbo = largeScratchFbo, meanCorrFbo = largeMeanCorrFbo, meanCorrTex = largeMeanCorrTex,
             abFbo = largeAbFbo, abTex = largeAbTex,
             qScratchFbo = largeScratchFbo, qFbo = qLargeFbo
@@ -288,7 +297,7 @@ class StructurePipeline {
      * used for the pyramid in the previous architecture.
      */
     private fun runGuidedFilterScale(
-        outputW: Int, outputH: Int, radius: Float,
+        outputW: Int, outputH: Int, radius: Float, epsilon: Float,
         meanCorrScratchFbo: Int, meanCorrFbo: Int, meanCorrTex: Int,
         abFbo: Int, abTex: Int,
         qScratchFbo: Int, qFbo: Int
@@ -329,7 +338,7 @@ class StructurePipeline {
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, meanCorrTex)
         GLES20.glUniform1i(ab.uniform("u_meanCorr"), 0)
-        GLES20.glUniform1f(ab.uniform("u_epsilon"), GUIDED_EPSILON)
+        GLES20.glUniform1f(ab.uniform("u_epsilon"), epsilon)
         drawFullScreenQuad(ab)
 
         // mean(a), mean(b), then reconstruct q = mean_a * I + mean_b against the true original.
