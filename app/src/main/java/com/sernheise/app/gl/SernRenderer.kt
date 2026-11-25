@@ -48,6 +48,11 @@ class SernRenderer(private val listener: Listener) : android.opengl.GLSurfaceVie
     @Volatile
     var sourceRotationDegrees: Int = 0
 
+    /** TEMPORARY diagnostic -- see onSurfaceCreated(). */
+    @Volatile
+    var maxTextureSize: Int = 0
+        private set
+
     @Volatile
     private var mode: SourceMode = SourceMode.NONE
 
@@ -92,6 +97,14 @@ class SernRenderer(private val listener: Listener) : android.opengl.GLSurfaceVie
         GLES20.glClearColor(0f, 0f, 0f, 1f)
         mainProgram = ShaderProgram(SernShaders.VERTEX, SernShaders.FRAGMENT_2D)
 
+        // TEMPORARY diagnostic -- see EditorActivity's debug dialog. A GPU's max texture
+        // size can be smaller than a 2.5K/4K video's raw frame size; if StructurePipeline's
+        // FBO textures ever exceed it, glTexImage2D silently fails/clamps instead of
+        // throwing, which can show up as exactly this kind of "wrong aspect" render bug.
+        val maxTexSizeArr = IntArray(1)
+        GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_SIZE, maxTexSizeArr, 0)
+        maxTextureSize = maxTexSizeArr[0]
+
         imageTextureId = createTexture(GLES20.GL_TEXTURE_2D)
         videoTextureId = createTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES)
         videoSurfaceTexture = SurfaceTexture(videoTextureId)
@@ -127,13 +140,15 @@ class SernRenderer(private val listener: Listener) : android.opengl.GLSurfaceVie
         }
 
         val structureAmount = (adjustments.structure / 100f).coerceIn(0f, 1f)
+        val clarityAmount = (adjustments.clarity / 100f).coerceIn(-1f, 1f)
         val finalTex = structurePipeline.process(
             sourceTextureId = imageTextureId,
             sourceIsOES = false,
             sourceTexMatrix = identityMatrix,
             contentWidth = contentWidth,
             contentHeight = contentHeight,
-            structureAmount = structureAmount
+            structureAmount = structureAmount,
+            clarityAmount = clarityAmount
         )
 
         // The pipeline may have changed the bound framebuffer/viewport internally --
@@ -166,6 +181,7 @@ class SernRenderer(private val listener: Listener) : android.opengl.GLSurfaceVie
         surfaceTexture.getTransformMatrix(texMatrix)
 
         val structureAmount = (adjustments.structure / 100f).coerceIn(0f, 1f)
+        val clarityAmount = (adjustments.clarity / 100f).coerceIn(-1f, 1f)
         // Video always goes through the pipeline's resolve step (OES -> plain 2D), even
         // when Structure is off, so the main shader below never needs to know or care
         // whether the source was a photo or a video frame.
@@ -175,7 +191,8 @@ class SernRenderer(private val listener: Listener) : android.opengl.GLSurfaceVie
             sourceTexMatrix = texMatrix,
             contentWidth = contentWidth,
             contentHeight = contentHeight,
-            structureAmount = structureAmount
+            structureAmount = structureAmount,
+            clarityAmount = clarityAmount
         )
 
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
@@ -234,13 +251,15 @@ class SernRenderer(private val listener: Listener) : android.opengl.GLSurfaceVie
         val program = mainProgram ?: throw IllegalStateException("Renderer not initialized")
 
         val structureAmount = (exportAdjustments.structure / 100f).coerceIn(0f, 1f)
+        val clarityAmount = (exportAdjustments.clarity / 100f).coerceIn(-1f, 1f)
         val sourceTex = structurePipeline.process(
             sourceTextureId = imageTextureId,
             sourceIsOES = false,
             sourceTexMatrix = identityMatrix,
             contentWidth = contentWidth,
             contentHeight = contentHeight,
-            structureAmount = structureAmount
+            structureAmount = structureAmount,
+            clarityAmount = clarityAmount
         )
 
         val frameBuffers = IntArray(1)

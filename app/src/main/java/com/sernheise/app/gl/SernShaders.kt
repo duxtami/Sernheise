@@ -44,6 +44,7 @@ object SernShaders {
         uniform float u_temperature;
         uniform float u_tint;
         uniform float u_sharpen;
+        uniform float u_vibrance;
 
         vec3 sampleAt(vec2 uv) {
             return texture2D(u_texture, uv).rgb;
@@ -80,9 +81,16 @@ object SernShaders {
             float contrastFactor = 1.0 + u_contrast;
             color = (color - 0.5) * contrastFactor + 0.5;
 
-            // ---- Saturation ----
+            // ---- Saturation & Vibrance ----
             float gray = lumOf(color);
-            color = mix(vec3(gray), color, 1.0 + u_saturation);
+            float maxColor = max(color.r, max(color.g, color.b));
+            float minColor = min(color.r, min(color.g, color.b));
+            float sat = maxColor - minColor;
+            float vibranceFactor = 1.0 + (u_vibrance * (1.0 - sat)); 
+            
+            // First apply vibrance, then apply generic saturation
+            color = mix(vec3(gray), color, vibranceFactor);
+            color = mix(vec3(lumOf(color)), color, 1.0 + u_saturation);
 
             // ---- Sharpen: small-radius luminance unsharp mask ----
             if (u_sharpen > 0.001) {

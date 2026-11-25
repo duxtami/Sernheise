@@ -16,8 +16,8 @@ import com.sernheise.app.databinding.ActivityEditorBinding
 import com.sernheise.app.gl.Adjustments
 import com.sernheise.app.gl.RotationUtils
 import com.sernheise.app.gl.Tool
-import com.sernheise.app.gl.get
-import com.sernheise.app.gl.set
+import com.sernheise.app.gl.getToolValue
+import com.sernheise.app.gl.setToolValue
 import com.sernheise.app.ui.ExportProgressDialog
 import com.sernheise.app.ui.ToolAdapter
 import com.sernheise.app.ui.ToolCatalog
@@ -43,6 +43,7 @@ class EditorActivity : AppCompatActivity() {
 
     private lateinit var toolAdapter: ToolAdapter
     private var exportDialog: ExportProgressDialog? = null
+    private var activeVideoExporter: VideoExporter? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -120,6 +121,56 @@ class EditorActivity : AppCompatActivity() {
             player.setDataSource(this, sourceUri)
             player.setSurface(Surface(surfaceTexture))
             player.isLooping = true
+            // MediaPlayer's real decode size, once it's known, is authoritative -- but *how*
+            // to react to it depends on WHICH size it reports:
+            //  - Matches the container's raw (pre-rotation) size: our own GL-side rotation
+            //    (via Quad) is still needed exactly as before, nothing to change.
+            //  - Matches the ROTATED (post-rotation) size: on some devices, for some files,
+            //    MediaPlayer's own decode pipeline bakes the container's rotation directly
+            //    into the delivered buffer instead of leaving it for us to apply. If we kept
+            //    applying our own 90/270 rotation on top of an already-rotated buffer, the
+            //    result is rotated a *second* time -- which is exactly what shows up as a
+            //    sideways, wrongly-sized preview. In that case, disable our own rotation and
+            //    just treat the reported size as the natural content size directly.
+            //  - Matches neither: a genuine size mismatch unrelated to rotation (e.g. a
+            //    decoder-level resolution clamp) -- resync to it, keeping whatever rotation
+            //    we already computed.
+            player.setOnVideoSizeChangedListener { _, mpWidth, mpHeight ->
+                if (mpWidth <= 0 || mpHeight <= 0) return@setOnVideoSizeChangedListener
+                val rawAspect = geometry.naturalWidth.toFloat() / geometry.naturalHeight
+                val rotatedAspect = geometry.naturalHeight.toFloat() / geometry.naturalWidth
+                val mpAspect = mpWidth.toFloat() / mpHeight
+                // Compare aspect ratios (with a small tolerance) rather than exact pixel
+                // dimensions -- some decoders report a buffer a few pixels off from the
+                // container's declared size (macroblock/alignment rounding), which would
+                // make an exact-equality check miss the match entirely and fall through to
+                // the wrong branch below.
+                fun closeAspect(a: Float, b: Float) = kotlin.math.abs(a - b) < 0.02f
+                when {
+                    closeAspect(mpAspect, rawAspect) -> {
+                        // Exactly what we assumed -- nothing to do.
+                    }
+                    closeAspect(mpAspect, rotatedAspect) -> {
+                        Log.w(
+                            TAG,
+                            "MediaPlayer delivered an already-rotated ${mpWidth}x$mpHeight buffer " +
+                                "(container rotation=${geometry.rotationDegrees}) -- disabling our own GL rotation to avoid double-rotating"
+                        )
+                        surfaceTexture.setDefaultBufferSize(mpWidth, mpHeight)
+                        binding.preview.prepareForVideo(mpWidth, mpHeight)
+                        binding.preview.setSourceRotation(0)
+                    }
+                    else -> {
+                        Log.w(
+                            TAG,
+                            "MediaPlayer real decode size ${mpWidth}x$mpHeight differs from " +
+                                "container-declared ${geometry.naturalWidth}x${geometry.naturalHeight} -- re-syncing"
+                        )
+                        surfaceTexture.setDefaultBufferSize(mpWidth, mpHeight)
+                        binding.preview.prepareForVideo(mpWidth, mpHeight)
+                    }
+                }
+            }
             player.setOnPreparedListener {
                 it.start()
                 mainHandler.post { setLoading(false) }
@@ -155,6 +206,13 @@ class EditorActivity : AppCompatActivity() {
                 player.start()
                 userPaused = false
                 binding.preview.setContinuousRendering(true)
+                // Switching WHEN_DIRTY -> CONTINUOUSLY wakes the GL thread on its own next
+                // loop iteration, but that iteration can lag behind MediaPlayer.start() by
+                // a frame or two on some devices/OEM builds, so playback silently resumes
+                // (position/audio move) while the view still shows the frozen paused frame
+                // until something else happens to trigger a draw. Force one immediately so
+                // the resume is visible on the very next vsync instead of waiting on that.
+                binding.preview.requestRender()
             }
         }
     }
@@ -203,10 +261,13 @@ class EditorActivity : AppCompatActivity() {
     private fun selectTool(tool: Tool) {
         selectedTool = tool
         val label = getString(labelFor(tool))
-        val value = currentAdjustments.get(tool)
+        val value = currentAdjustments.getToolValue(tool)
 
         binding.activeToolLabel.visibility = android.view.View.VISIBLE
         binding.toolSlider.visibility = android.view.View.VISIBLE
+
+        // Reset to a safe value before changing bounds to prevent IllegalArgumentException
+        binding.toolSlider.value = 0f
 
         if (tool.isBipolar) {
             binding.toolSlider.valueFrom = Adjustments.MIN
@@ -250,7 +311,7 @@ class EditorActivity : AppCompatActivity() {
             if (!fromUser) return@addOnChangeListener
 
             val updated = currentAdjustments.copy()
-            updated.set(tool, value)
+            updated.setToolValue(tool, value)
             currentAdjustments = updated
             binding.preview.updateAdjustments(currentAdjustments)
             updateActiveToolLabel(getString(labelFor(tool)), value)
@@ -385,10 +446,18 @@ class EditorActivity : AppCompatActivity() {
 
     private fun exportVideo(dialog: ExportProgressDialog) {
         mainHandler.post { dialog.updateProgress(0, R.string.export_status_preparing) }
+        val exporter = VideoExporter(this)
+        activeVideoExporter = exporter
+        dialog.onCancelRequested = {
+            // Just flips a flag the exporter checks between codec steps -- the background
+            // thread below unwinds itself and reports onCancelled(); we don't touch it here.
+            exporter.cancel()
+            dialog.showCancelling()
+        }
         Thread {
             try {
                 val outputFile = File(cacheDir, MediaUtils.timestampedFileName("sernheise_export", "mp4"))
-                VideoExporter(this).export(sourceUri, currentAdjustments, outputFile, object : VideoExporter.Callback {
+                exporter.export(sourceUri, currentAdjustments, outputFile, object : VideoExporter.Callback {
                     override fun onProgress(percent: Int) {
                         mainHandler.post {
                             val statusRes = if (percent >= 100) R.string.export_status_finishing else R.string.export_status_processing
@@ -410,7 +479,22 @@ class EditorActivity : AppCompatActivity() {
 
                     override fun onError(error: Exception) {
                         Log.e(TAG, "Video export failed", error)
-                        mainHandler.post { finishExport(dialog, success = false) }
+                        try {
+                            java.io.File(cacheDir, "export_error.txt").writeText(android.util.Log.getStackTraceString(error))
+                        } catch (ignored: Exception) {}
+                        mainHandler.post { 
+                            Toast.makeText(this@EditorActivity, "Error saved to cacheDir/export_error.txt: ${error.message}", Toast.LENGTH_LONG).show()
+                            finishExport(dialog, success = false) 
+                        }
+                    }
+
+                    override fun onCancelled() {
+                        mainHandler.post {
+                            activeVideoExporter = null
+                            setExportControlsEnabled(true)
+                            exportDialog = null
+                            dialog.dismissImmediately()
+                        }
                     }
                 })
             } catch (t: Throwable) {
@@ -419,6 +503,8 @@ class EditorActivity : AppCompatActivity() {
                 // would otherwise take the whole app down.
                 Log.e(TAG, "Video export failed unexpectedly", t)
                 mainHandler.post { finishExport(dialog, success = false) }
+            } finally {
+                activeVideoExporter = null
             }
         }.start()
     }
@@ -452,13 +538,19 @@ class EditorActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         mediaPlayer?.let { if (it.isPlaying) it.pause() }
+        // GLSurfaceView needs its own onPause() so the GL thread releases the EGL surface
+        // cleanly while backgrounded -- without it, resuming the thread after onResume()
+        // can leave rendering stuck on a stale frame even though the view is visible again.
+        binding.preview.onPause()
     }
 
     override fun onResume() {
         super.onResume()
+        binding.preview.onResume()
         if (!userPaused) {
             mediaPlayer?.start()
             binding.preview.setContinuousRendering(true)
+            binding.preview.requestRender()
         }
     }
 

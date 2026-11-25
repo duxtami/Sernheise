@@ -17,7 +17,16 @@ class SernPreviewView @JvmOverloads constructor(
 ) : GLSurfaceView(context, attrs) {
 
     private val renderer: SernRenderer
+    private var pendingVideoSurface: SurfaceTexture? = null
+
     var videoSurfaceReadyListener: ((SurfaceTexture) -> Unit)? = null
+        set(value) {
+            field = value
+            pendingVideoSurface?.let {
+                value?.invoke(it)
+                pendingVideoSurface = null
+            }
+        }
 
     init {
         setEGLContextClientVersion(2)
@@ -25,7 +34,13 @@ class SernPreviewView @JvmOverloads constructor(
 
         renderer = SernRenderer(object : SernRenderer.Listener {
             override fun onVideoSurfaceReady(surfaceTexture: SurfaceTexture) {
-                post { videoSurfaceReadyListener?.invoke(surfaceTexture) }
+                post {
+                    if (videoSurfaceReadyListener != null) {
+                        videoSurfaceReadyListener?.invoke(surfaceTexture)
+                    } else {
+                        pendingVideoSurface = surfaceTexture
+                    }
+                }
             }
 
             override fun onFrameDrawn() {
@@ -60,6 +75,9 @@ class SernPreviewView @JvmOverloads constructor(
         renderer.updateAdjustments(adjustments)
         requestRender()
     }
+
+    /** TEMPORARY diagnostic -- see SernRenderer.onSurfaceCreated(). */
+    fun getMaxTextureSizeForDebug(): Int = renderer.maxTextureSize
 
     /** Renders the full-resolution edited image on the GL thread and delivers it on [onResult]. */
     fun exportImage(width: Int, height: Int, adjustments: Adjustments, onResult: (Bitmap) -> Unit) {

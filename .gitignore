@@ -7,19 +7,25 @@
 /captures
 .externalNativeBuild
 .cxx
-local.properties
 
-# Android Studio / IntelliJ
+# Built application files
 *.apk
+*.aar
 *.ap_
 *.aab
+
+# Files for the ART/Dalvik VM
 *.dex
+
+# Java class files
 *.class
+
+# Generated files
 bin/
 gen/
 out/
 app/build/
-app/release/
-app/debug/
-*.log
-.navigation/
+
+# Signing files
+*.jks
+*.keystore

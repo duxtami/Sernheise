@@ -40,6 +40,17 @@ class ExportProgressDialog(activityContext: Context) {
     private val progressBar: LinearProgressIndicator = view.findViewById(R.id.exportProgressBar)
     private val percentText: TextView = view.findViewById(R.id.exportPercent)
     private val etaText: TextView = view.findViewById(R.id.exportEta)
+    private val cancelButton: TextView = view.findViewById(R.id.exportCancel)
+
+    /**
+     * Set by the caller to make the Cancel button appear and wire it up. Left null (button
+     * stays gone) for exports with no cancellable long-running phase, e.g. image export.
+     */
+    var onCancelRequested: (() -> Unit)? = null
+        set(value) {
+            field = value
+            cancelButton.visibility = if (value != null) View.VISIBLE else View.GONE
+        }
 
     // Uses a MaterialComponents (M2) dialog overlay -- matches the app's actual base theme.
     // See the comment on ThemeOverlay.Sernheise.ExportDialog in themes.xml for why this
@@ -56,10 +67,36 @@ class ExportProgressDialog(activityContext: Context) {
         try {
             startTimeMillis = System.currentTimeMillis()
             dialog.setCanceledOnTouchOutside(false)
+            cancelButton.setOnClickListener {
+                // Disable immediately so a double-tap can't fire the handler twice while the
+                // background thread is still unwinding.
+                cancelButton.isEnabled = false
+                onCancelRequested?.invoke()
+            }
             dialog.show()
             dimAndBlurBehind()
         } catch (t: Throwable) {
             Log.e(TAG, "show() failed", t)
+        }
+    }
+
+    /** Called right after the user taps Cancel, before the export has actually torn itself down. */
+    fun showCancelling() {
+        try {
+            if (!dialog.isShowing) return
+            statusText.setText(R.string.export_cancelling)
+            etaText.visibility = View.INVISIBLE
+        } catch (t: Throwable) {
+            Log.e(TAG, "showCancelling() failed", t)
+        }
+    }
+
+    /** Closes the dialog with no success/error flourish, once a cancel has fully taken effect. */
+    fun dismissImmediately() {
+        try {
+            dialog.dismiss()
+        } catch (t: Throwable) {
+            Log.e(TAG, "dismissImmediately() failed", t)
         }
     }
 

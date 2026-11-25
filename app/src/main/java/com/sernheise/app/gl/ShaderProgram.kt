@@ -23,6 +23,7 @@ class ShaderProgram(vertexSrc: String, fragmentSrc: String) {
     val uTemperature: Int
     val uTint: Int
     val uSharpen: Int
+    val uVibrance: Int
 
     init {
         val vertexShader = compile(GLES20.GL_VERTEX_SHADER, vertexSrc)
@@ -57,6 +58,7 @@ class ShaderProgram(vertexSrc: String, fragmentSrc: String) {
         uTemperature = GLES20.glGetUniformLocation(programHandle, "u_temperature")
         uTint = GLES20.glGetUniformLocation(programHandle, "u_tint")
         uSharpen = GLES20.glGetUniformLocation(programHandle, "u_sharpen")
+        uVibrance = GLES20.glGetUniformLocation(programHandle, "u_vibrance")
     }
 
     fun use() = GLES20.glUseProgram(programHandle)
@@ -72,6 +74,8 @@ class ShaderProgram(vertexSrc: String, fragmentSrc: String) {
         GLES20.glUniform1f(uTemperature, adj.temperature / 100f * 0.35f)
         GLES20.glUniform1f(uTint, adj.tint / 100f * 0.35f)
         GLES20.glUniform1f(uSharpen, (adj.sharpen / 100f).coerceIn(0f, 1f))
+        
+        if (uVibrance >= 0) GLES20.glUniform1f(uVibrance, adj.vibrance / 100f * 1.5f)
     }
 
     private fun compile(type: Int, src: String): Int {

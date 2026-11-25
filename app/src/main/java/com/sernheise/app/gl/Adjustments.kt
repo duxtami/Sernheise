@@ -22,7 +22,9 @@ data class Adjustments(
     var temperature: Float = 0f,
     var tint: Float = 0f,
     var structure: Float = 0f,
+    var clarity: Float = 0f,
     var sharpen: Float = 0f,
+    var vibrance: Float = 0f,
     var rotation: Int = 0,
     var flipHorizontal: Boolean = false,
     var flipVertical: Boolean = false
@@ -54,13 +56,15 @@ enum class Tool(val isBipolar: Boolean) {
     TEMPERATURE(true),
     TINT(true),
     STRUCTURE(false),
+    CLARITY(true),
     SHARPEN(false),
+    VIBRANCE(true),
     ROTATE(false),
     FLIP_HORIZONTAL(false),
     FLIP_VERTICAL(false)
 }
 
-fun Adjustments.get(tool: Tool): Float = when (tool) {
+fun Adjustments.getToolValue(tool: Tool): Float = when (tool) {
     Tool.EXPOSURE -> exposure
     Tool.BRIGHTNESS -> brightness
     Tool.CONTRAST -> contrast
@@ -70,13 +74,15 @@ fun Adjustments.get(tool: Tool): Float = when (tool) {
     Tool.TEMPERATURE -> temperature
     Tool.TINT -> tint
     Tool.STRUCTURE -> structure
+    Tool.CLARITY -> clarity
     Tool.SHARPEN -> sharpen
+    Tool.VIBRANCE -> vibrance
     Tool.ROTATE -> rotation.toFloat()
     Tool.FLIP_HORIZONTAL -> if (flipHorizontal) 1f else 0f
     Tool.FLIP_VERTICAL -> if (flipVertical) 1f else 0f
 }
 
-fun Adjustments.set(tool: Tool, value: Float) {
+fun Adjustments.setToolValue(tool: Tool, value: Float) {
     when (tool) {
         Tool.EXPOSURE -> exposure = value
         Tool.BRIGHTNESS -> brightness = value
@@ -87,7 +93,9 @@ fun Adjustments.set(tool: Tool, value: Float) {
         Tool.TEMPERATURE -> temperature = value
         Tool.TINT -> tint = value
         Tool.STRUCTURE -> structure = value
+        Tool.CLARITY -> clarity = value
         Tool.SHARPEN -> sharpen = value
+        Tool.VIBRANCE -> vibrance = value
         Tool.ROTATE -> rotation = value.toInt()
         Tool.FLIP_HORIZONTAL -> flipHorizontal = value != 0f
         Tool.FLIP_VERTICAL -> flipVertical = value != 0f

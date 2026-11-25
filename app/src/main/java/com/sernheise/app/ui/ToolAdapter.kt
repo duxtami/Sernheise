@@ -7,7 +7,7 @@ import com.sernheise.app.R
 import com.sernheise.app.databinding.ItemToolBinding
 import com.sernheise.app.gl.Adjustments
 import com.sernheise.app.gl.Tool
-import com.sernheise.app.gl.get
+import com.sernheise.app.gl.getToolValue
 
 class ToolAdapter(
     private val items: List<ToolItem>,
@@ -30,7 +30,7 @@ class ToolAdapter(
         holder.binding.toolIcon.setImageResource(item.iconRes)
         holder.binding.toolLabel.setText(item.labelRes)
 
-        val isActive = adjustments().get(item.tool) != 0f
+        val isActive = adjustments().getToolValue(item.tool) != 0f
         val isSelected = selectedTool == item.tool
         val color = if (isSelected || isActive) R.color.sern_accent else R.color.sern_text_secondary
         holder.binding.toolIcon.setColorFilter(context.getColor(color))

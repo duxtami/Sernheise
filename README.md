@@ -5,14 +5,6 @@ on Android: a **Structure** (clarity/local-contrast) effect, alongside Sharpen a
 standard tonal adjustments — Exposure, Brightness, Contrast, Saturation, Highlights,
 Shadows, Temperature, Tint.
 
-## Screenshots
-
-<p align="center">
-  <img src="screenshot/Screenshot_20260807-160135.png" width="30%" />
-  <img src="screenshot/Screenshot_20260807-160306.png" width="30%" />
-  <img src="screenshot/Screenshot_20260807-160311.png" width="30%" />
-</p>
-
 ## Stack
 - Kotlin, single-activity-per-screen (`MainActivity` → `EditorActivity`)
 - Custom OpenGL ES 2.0 rendering pipeline (`com.sernheise.app.gl`) — one shared shader

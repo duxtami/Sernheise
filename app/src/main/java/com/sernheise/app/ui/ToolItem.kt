@@ -11,6 +11,7 @@ object ToolCatalog {
         ToolItem(Tool.BRIGHTNESS, R.drawable.ic_brightness, R.string.tool_brightness),
         ToolItem(Tool.CONTRAST, R.drawable.ic_contrast, R.string.tool_contrast),
         ToolItem(Tool.SATURATION, R.drawable.ic_saturation, R.string.tool_saturation),
+        ToolItem(Tool.VIBRANCE, R.drawable.ic_vibrance, R.string.tool_vibrance),
         ToolItem(Tool.HIGHLIGHTS, R.drawable.ic_highlights, R.string.tool_highlights),
         ToolItem(Tool.SHADOWS, R.drawable.ic_shadows, R.string.tool_shadows),
         ToolItem(Tool.TEMPERATURE, R.drawable.ic_temperature, R.string.tool_temperature),
@@ -22,6 +23,7 @@ object ToolCatalog {
 
     val detailTools = listOf(
         ToolItem(Tool.STRUCTURE, R.drawable.ic_structure, R.string.tool_structure),
+        ToolItem(Tool.CLARITY, R.drawable.ic_clarity, R.string.tool_clarity),
         ToolItem(Tool.SHARPEN, R.drawable.ic_sharpen, R.string.tool_sharpen)
     )
 }

@@ -31,7 +31,11 @@ object MediaUtils {
      * (EditorActivity) and the exporter (VideoExporter) call this same function, which is
      * what guarantees preview and export always agree on orientation.
      */
-    data class VideoGeometry(val naturalWidth: Int, val naturalHeight: Int, val rotationDegrees: Int)
+    data class VideoGeometry(
+        val naturalWidth: Int,
+        val naturalHeight: Int,
+        val rotationDegrees: Int
+    )
 
     /**
      * Rotation is read primarily from [MediaExtractor]'s own track format (`KEY_ROTATION`,
@@ -92,6 +96,7 @@ object MediaUtils {
         val height = extractorHeight ?: retrieverHeight ?: 1080
         val rotation = extractorRotation ?: retrieverRotation ?: 0
         val normalizedRotation = ((rotation % 360) + 360) % 360
+
         return VideoGeometry(width, height, normalizedRotation)
     }
 
