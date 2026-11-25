@@ -23,7 +23,6 @@ object ToolCatalog {
 
     val detailTools = listOf(
         ToolItem(Tool.STRUCTURE, R.drawable.ic_structure, R.string.tool_structure),
-        ToolItem(Tool.CLARITY, R.drawable.ic_clarity, R.string.tool_clarity),
         ToolItem(Tool.SHARPEN, R.drawable.ic_sharpen, R.string.tool_sharpen)
     )
 }

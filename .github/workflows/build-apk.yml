@@ -1,29 +1,15 @@
-name: Build Android APK
+name: Build Debug APK
 
 on:
   push:
     branches: [ "main", "master" ]
-    tags: [ "v*" ]
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build variant to produce'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - 'debug'
-          - 'release'
-          - 'both'
-
-permissions:
-  contents: write
 
 jobs:
   build:
-    name: Build & Package APK
+    name: Build Debug APK
     runs-on: ubuntu-latest
 
     steps:
@@ -40,41 +26,12 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest --continue
-
       - name: Build Debug APK
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'debug' || inputs.build_type == 'both' }}
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Build Release APK
-        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.build_type == 'release' || inputs.build_type == 'both')) }}
-        run: ./gradlew assembleRelease --stacktrace
-
       - name: Upload Debug APK
-        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.build_type == 'debug' || inputs.build_type == 'both') }}
         uses: actions/upload-artifact@v4
         with:
           name: sernheise-debug-apk
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
           retention-days: 14
-
-      - name: Upload Release APK
-        if: ${{ always() && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.build_type == 'release' || inputs.build_type == 'both'))) }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: sernheise-release-apk
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/release/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

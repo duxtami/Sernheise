@@ -140,15 +140,13 @@ class SernRenderer(private val listener: Listener) : android.opengl.GLSurfaceVie
         }
 
         val structureAmount = (adjustments.structure / 100f).coerceIn(0f, 1f)
-        val clarityAmount = (adjustments.clarity / 100f).coerceIn(-1f, 1f)
         val finalTex = structurePipeline.process(
             sourceTextureId = imageTextureId,
             sourceIsOES = false,
             sourceTexMatrix = identityMatrix,
             contentWidth = contentWidth,
             contentHeight = contentHeight,
-            structureAmount = structureAmount,
-            clarityAmount = clarityAmount
+            structureAmount = structureAmount
         )
 
         // The pipeline may have changed the bound framebuffer/viewport internally --
@@ -181,7 +179,6 @@ class SernRenderer(private val listener: Listener) : android.opengl.GLSurfaceVie
         surfaceTexture.getTransformMatrix(texMatrix)
 
         val structureAmount = (adjustments.structure / 100f).coerceIn(0f, 1f)
-        val clarityAmount = (adjustments.clarity / 100f).coerceIn(-1f, 1f)
         // Video always goes through the pipeline's resolve step (OES -> plain 2D), even
         // when Structure is off, so the main shader below never needs to know or care
         // whether the source was a photo or a video frame.
@@ -191,8 +188,7 @@ class SernRenderer(private val listener: Listener) : android.opengl.GLSurfaceVie
             sourceTexMatrix = texMatrix,
             contentWidth = contentWidth,
             contentHeight = contentHeight,
-            structureAmount = structureAmount,
-            clarityAmount = clarityAmount
+            structureAmount = structureAmount
         )
 
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
@@ -251,15 +247,13 @@ class SernRenderer(private val listener: Listener) : android.opengl.GLSurfaceVie
         val program = mainProgram ?: throw IllegalStateException("Renderer not initialized")
 
         val structureAmount = (exportAdjustments.structure / 100f).coerceIn(0f, 1f)
-        val clarityAmount = (exportAdjustments.clarity / 100f).coerceIn(-1f, 1f)
         val sourceTex = structurePipeline.process(
             sourceTextureId = imageTextureId,
             sourceIsOES = false,
             sourceTexMatrix = identityMatrix,
             contentWidth = contentWidth,
             contentHeight = contentHeight,
-            structureAmount = structureAmount,
-            clarityAmount = clarityAmount
+            structureAmount = structureAmount
         )
 
         val frameBuffers = IntArray(1)

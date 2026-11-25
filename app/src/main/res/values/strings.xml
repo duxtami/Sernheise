@@ -18,7 +18,6 @@
     <string name="tool_flip_horizontal">Flip H</string>
     <string name="tool_flip_vertical">Flip V</string>
     <string name="tool_structure">Structure</string>
-    <string name="tool_clarity">Clarity</string>
     <string name="tool_sharpen">Sharpen</string>
     <string name="action_export">Export</string>
     <string name="action_reset">Reset</string>

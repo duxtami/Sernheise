@@ -425,15 +425,13 @@ class VideoExporter(private val context: Context) {
                         surfaceTexture.getTransformMatrix(texMatrix)
 
                         val structureAmount = (adjustments.structure / 100f).coerceIn(0f, 1f)
-                        val clarityAmount = (adjustments.clarity / 100f).coerceIn(-1f, 1f)
                         val finalTex = structurePipeline.process(
                             sourceTextureId = oesTextureId,
                             sourceIsOES = true,
                             sourceTexMatrix = texMatrix,
                             contentWidth = width,
                             contentHeight = height,
-                            structureAmount = structureAmount,
-                            clarityAmount = clarityAmount
+                            structureAmount = structureAmount
                         )
 
                         // The pipeline may have bound its own FBOs internally -- rebind the

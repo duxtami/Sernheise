@@ -22,7 +22,6 @@ data class Adjustments(
     var temperature: Float = 0f,
     var tint: Float = 0f,
     var structure: Float = 0f,
-    var clarity: Float = 0f,
     var sharpen: Float = 0f,
     var vibrance: Float = 0f,
     var rotation: Int = 0,
@@ -56,7 +55,6 @@ enum class Tool(val isBipolar: Boolean) {
     TEMPERATURE(true),
     TINT(true),
     STRUCTURE(false),
-    CLARITY(true),
     SHARPEN(false),
     VIBRANCE(true),
     ROTATE(false),
@@ -74,7 +72,6 @@ fun Adjustments.getToolValue(tool: Tool): Float = when (tool) {
     Tool.TEMPERATURE -> temperature
     Tool.TINT -> tint
     Tool.STRUCTURE -> structure
-    Tool.CLARITY -> clarity
     Tool.SHARPEN -> sharpen
     Tool.VIBRANCE -> vibrance
     Tool.ROTATE -> rotation.toFloat()
@@ -93,7 +90,6 @@ fun Adjustments.setToolValue(tool: Tool, value: Float) {
         Tool.TEMPERATURE -> temperature = value
         Tool.TINT -> tint = value
         Tool.STRUCTURE -> structure = value
-        Tool.CLARITY -> clarity = value
         Tool.SHARPEN -> sharpen = value
         Tool.VIBRANCE -> vibrance = value
         Tool.ROTATE -> rotation = value.toInt()
