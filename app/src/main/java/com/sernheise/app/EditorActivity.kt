@@ -8,10 +8,15 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Surface
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.slider.Slider
 import com.sernheise.app.databinding.ActivityEditorBinding
 import com.sernheise.app.gl.Adjustments
 import com.sernheise.app.gl.RotationUtils
@@ -40,6 +45,24 @@ class EditorActivity : AppCompatActivity() {
     private var currentAdjustments = Adjustments()
     private var selectedTool: Tool? = null
     private var userPaused = false
+    private var isSeeking = false
+    private var lastScrubSeekMs = 0L
+    private var videoDurationMs = 0
+    private var isFullscreen = false
+
+    private val seekUpdateRunnable = object : Runnable {
+        override fun run() {
+            val player = mediaPlayer
+            if (player != null && player.isPlaying && !isSeeking && videoDurationMs > 0) {
+                val pos = player.currentPosition.coerceIn(0, videoDurationMs)
+                binding.videoSeekSlider.value = pos.toFloat()
+                binding.tvCurrentTime.text = formatTime(pos)
+            }
+            if (mediaPlayer != null && !userPaused) {
+                mainHandler.postDelayed(this, 100L)
+            }
+        }
+    }
 
     private lateinit var toolAdapter: ToolAdapter
     private var exportDialog: ExportProgressDialog? = null
@@ -61,6 +84,7 @@ class EditorActivity : AppCompatActivity() {
         setupToolStrip()
         setupTopBar()
         setupSlider()
+        setupVideoSeekControls()
         setupPreviewTapToPause()
         loadMedia()
     }
@@ -171,9 +195,19 @@ class EditorActivity : AppCompatActivity() {
                     }
                 }
             }
+            player.setOnSeekCompleteListener {
+                if (userPaused) {
+                    binding.preview.requestRender()
+                }
+            }
             player.setOnPreparedListener {
+                val duration = it.duration.coerceAtLeast(0)
                 it.start()
-                mainHandler.post { setLoading(false) }
+                mainHandler.post {
+                    setLoading(false)
+                    initVideoSeekBar(duration)
+                    startSeekUpdates()
+                }
             }
             player.setOnErrorListener { _, what, extra ->
                 Log.e(TAG, "MediaPlayer error what=$what extra=$extra")
@@ -195,25 +229,104 @@ class EditorActivity : AppCompatActivity() {
     /** Tap the preview to pause; tap again to resume from the same frame. Images ignore this. */
     private fun setupPreviewTapToPause() {
         binding.preview.setOnClickListener {
-            val player = mediaPlayer ?: return@setOnClickListener
-            if (player.isPlaying) {
-                player.pause()
-                userPaused = true
-                // No new frames are coming in while paused -- stop burning GPU/battery
-                // redrawing the identical last frame at the display's full refresh rate.
-                binding.preview.setContinuousRendering(false)
-            } else {
-                player.start()
-                userPaused = false
-                binding.preview.setContinuousRendering(true)
-                // Switching WHEN_DIRTY -> CONTINUOUSLY wakes the GL thread on its own next
-                // loop iteration, but that iteration can lag behind MediaPlayer.start() by
-                // a frame or two on some devices/OEM builds, so playback silently resumes
-                // (position/audio move) while the view still shows the frozen paused frame
-                // until something else happens to trigger a draw. Force one immediately so
-                // the resume is visible on the very next vsync instead of waiting on that.
-                binding.preview.requestRender()
+            togglePlayPause()
+        }
+    }
+
+    private fun togglePlayPause() {
+        val player = mediaPlayer ?: return
+        if (player.isPlaying) {
+            player.pause()
+            userPaused = true
+            // No new frames are coming in while paused -- stop burning GPU/battery
+            // redrawing the identical last frame at the display's full refresh rate.
+            binding.preview.setContinuousRendering(false)
+            updatePlayPauseIcon(isPlaying = false)
+            stopSeekUpdates()
+        } else {
+            player.start()
+            userPaused = false
+            binding.preview.setContinuousRendering(true)
+            // Switching WHEN_DIRTY -> CONTINUOUSLY wakes the GL thread on its own next
+            // loop iteration, but that iteration can lag behind MediaPlayer.start() by
+            // a frame or two on some devices/OEM builds, so playback silently resumes
+            // (position/audio move) while the view still shows the frozen paused frame
+            // until something else happens to trigger a draw. Force one immediately so
+            // the resume is visible on the very next vsync instead of waiting on that.
+            binding.preview.requestRender()
+            updatePlayPauseIcon(isPlaying = true)
+            startSeekUpdates()
+        }
+    }
+
+    private fun setupVideoSeekControls() {
+        binding.btnPlayPause.setOnClickListener { togglePlayPause() }
+
+        binding.videoSeekSlider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
+            val posMs = value.toInt()
+            binding.tvCurrentTime.text = formatTime(posMs)
+            val now = System.currentTimeMillis()
+            if (now - lastScrubSeekMs >= 150L) {
+                lastScrubSeekMs = now
+                mediaPlayer?.seekTo(value.toLong(), MediaPlayer.SEEK_PREVIOUS_SYNC)
+                if (userPaused) {
+                    binding.preview.requestRender()
+                }
             }
+        }
+
+        binding.videoSeekSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {
+                isSeeking = true
+            }
+
+            override fun onStopTrackingTouch(slider: Slider) {
+                isSeeking = false
+                val targetMs = slider.value.toLong()
+                mediaPlayer?.seekTo(targetMs, MediaPlayer.SEEK_CLOSEST)
+                if (userPaused) {
+                    mainHandler.postDelayed({ binding.preview.requestRender() }, 80L)
+                }
+            }
+        })
+    }
+
+    private fun initVideoSeekBar(durationMs: Int) {
+        videoDurationMs = durationMs
+        binding.videoControlBar.visibility = View.VISIBLE
+        binding.videoSeekSlider.valueFrom = 0f
+        binding.videoSeekSlider.valueTo = durationMs.coerceAtLeast(1).toFloat()
+        binding.videoSeekSlider.value = 0f
+        binding.tvCurrentTime.text = formatTime(0)
+        binding.tvTotalTime.text = formatTime(durationMs)
+        updatePlayPauseIcon(isPlaying = !userPaused)
+    }
+
+    private fun updatePlayPauseIcon(isPlaying: Boolean) {
+        binding.btnPlayPause.setImageResource(
+            if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        )
+    }
+
+    private fun startSeekUpdates() {
+        mainHandler.removeCallbacks(seekUpdateRunnable)
+        mainHandler.post(seekUpdateRunnable)
+    }
+
+    private fun stopSeekUpdates() {
+        mainHandler.removeCallbacks(seekUpdateRunnable)
+    }
+
+    private fun formatTime(ms: Int): String {
+        val totalSeconds = (ms / 1000).coerceAtLeast(0)
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            String.format("%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format("%d:%02d", minutes, seconds)
         }
     }
 
@@ -352,7 +465,27 @@ class EditorActivity : AppCompatActivity() {
             true
         }
 
+        binding.btnFullscreen.setOnClickListener { setFullscreen(true) }
+        binding.btnExitFullscreen.setOnClickListener { setFullscreen(false) }
+
         binding.btnExport.setOnClickListener { export() }
+    }
+
+    private fun setFullscreen(fullscreen: Boolean) {
+        isFullscreen = fullscreen
+        val controller = WindowCompat.getInsetsController(window, binding.root)
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (fullscreen) {
+            binding.topBar.visibility = View.GONE
+            binding.bottomPanel.visibility = View.GONE
+            binding.btnExitFullscreen.visibility = View.VISIBLE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            binding.topBar.visibility = View.VISIBLE
+            binding.bottomPanel.visibility = View.VISIBLE
+            binding.btnExitFullscreen.visibility = View.GONE
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -537,6 +670,7 @@ class EditorActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        stopSeekUpdates()
         mediaPlayer?.let { if (it.isPlaying) it.pause() }
         // GLSurfaceView needs its own onPause() so the GL thread releases the EGL surface
         // cleanly while backgrounded -- without it, resuming the thread after onResume()
@@ -551,11 +685,16 @@ class EditorActivity : AppCompatActivity() {
             mediaPlayer?.start()
             binding.preview.setContinuousRendering(true)
             binding.preview.requestRender()
+            if (mediaPlayer != null) {
+                updatePlayPauseIcon(isPlaying = true)
+                startSeekUpdates()
+            }
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        stopSeekUpdates()
         mediaPlayer?.setOnErrorListener(null)
         mediaPlayer?.release()
         mediaPlayer = null
@@ -564,6 +703,10 @@ class EditorActivity : AppCompatActivity() {
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         if (exportDialog != null) return // ignore system back/gesture while exporting
+        if (isFullscreen) {
+            setFullscreen(false)
+            return
+        }
         super.onBackPressed()
     }
 }
