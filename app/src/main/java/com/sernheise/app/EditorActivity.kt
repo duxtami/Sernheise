@@ -577,7 +577,26 @@ class EditorActivity : AppCompatActivity() {
         }.start()
     }
 
+    private fun pausePreviewForExport() {
+        stopSeekUpdates()
+        mediaPlayer?.let { if (it.isPlaying) it.pause() }
+        binding.preview.setContinuousRendering(false)
+    }
+
+    private fun resumePreviewAfterExport() {
+        if (isFinishing || isDestroyed || userPaused) return
+        val player = mediaPlayer ?: return
+        if (!player.isPlaying) {
+            player.start()
+        }
+        binding.preview.setContinuousRendering(true)
+        binding.preview.requestRender()
+        updatePlayPauseIcon(isPlaying = true)
+        startSeekUpdates()
+    }
+
     private fun exportVideo(dialog: ExportProgressDialog) {
+        pausePreviewForExport()
         mainHandler.post { dialog.updateProgress(0, R.string.export_status_preparing) }
         val exporter = VideoExporter(this)
         activeVideoExporter = exporter
@@ -603,10 +622,16 @@ class EditorActivity : AppCompatActivity() {
                             val name = MediaUtils.timestampedFileName("Sernheise", "mp4")
                             val saved = MediaUtils.publishVideoToGallery(this@EditorActivity, outputFile, name)
                             outputFile.delete()
-                            mainHandler.post { finishExport(dialog, success = saved != null) }
+                            mainHandler.post {
+                                finishExport(dialog, success = saved != null)
+                                resumePreviewAfterExport()
+                            }
                         } catch (t: Throwable) {
                             Log.e(TAG, "Video export succeeded but publishing to gallery failed", t)
-                            mainHandler.post { finishExport(dialog, success = false) }
+                            mainHandler.post {
+                                finishExport(dialog, success = false)
+                                resumePreviewAfterExport()
+                            }
                         }
                     }
 
@@ -615,9 +640,10 @@ class EditorActivity : AppCompatActivity() {
                         try {
                             java.io.File(cacheDir, "export_error.txt").writeText(android.util.Log.getStackTraceString(error))
                         } catch (ignored: Exception) {}
-                        mainHandler.post { 
+                        mainHandler.post {
                             Toast.makeText(this@EditorActivity, "Error saved to cacheDir/export_error.txt: ${error.message}", Toast.LENGTH_LONG).show()
-                            finishExport(dialog, success = false) 
+                            finishExport(dialog, success = false)
+                            resumePreviewAfterExport()
                         }
                     }
 
@@ -627,6 +653,7 @@ class EditorActivity : AppCompatActivity() {
                             setExportControlsEnabled(true)
                             exportDialog = null
                             dialog.dismissImmediately()
+                            resumePreviewAfterExport()
                         }
                     }
                 })
@@ -635,7 +662,10 @@ class EditorActivity : AppCompatActivity() {
                 // just an Exception) -- an uncaught throwable on this background thread
                 // would otherwise take the whole app down.
                 Log.e(TAG, "Video export failed unexpectedly", t)
-                mainHandler.post { finishExport(dialog, success = false) }
+                mainHandler.post {
+                    finishExport(dialog, success = false)
+                    resumePreviewAfterExport()
+                }
             } finally {
                 activeVideoExporter = null
             }
@@ -681,7 +711,7 @@ class EditorActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         binding.preview.onResume()
-        if (!userPaused) {
+        if (!userPaused && exportDialog == null) {
             mediaPlayer?.start()
             binding.preview.setContinuousRendering(true)
             binding.preview.requestRender()
@@ -694,6 +724,7 @@ class EditorActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        activeVideoExporter?.cancel()
         stopSeekUpdates()
         mediaPlayer?.setOnErrorListener(null)
         mediaPlayer?.release()
